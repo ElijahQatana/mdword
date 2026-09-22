@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# mdword - render Markdown to a styled Word (.docx) file using a reference template.
+#
+# Usage:
+#   mdword input.md                 -> input.docx
+#   mdword input.md output.docx     -> custom output path
+#   mdword input.md --toc           -> also add a clickable table of contents
+#
+# Config:
+#   Reference template: ${XDG_CONFIG_HOME:-$HOME/.config}/mdword/reference.docx
+#   Override per-run:   MDWORD_REFERENCE_DOC=/path/to/other.docx mdword ...
+set -euo pipefail
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+REF="${MDWORD_REFERENCE_DOC:-$CONFIG_HOME/mdword/reference.docx}"
+
+usage() {
+  cat <<EOF
+Usage: mdword <input.md> [output.docx] [--toc]
+
+  --toc          add a clickable table of contents (off by default)
+  -h, --help     show this help
+
+Config:
+  Reference .docx: $CONFIG_HOME/mdword/reference.docx
+  Override per-run with MDWORD_REFERENCE_DOC=/path/to/file.docx
+EOF
+}
+
+if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  usage
+  exit 0
+fi
+
+if ! command -v pandoc >/dev/null 2>&1; then
+  echo "mdword: pandoc not found. Install with: brew install pandoc" >&2
+  exit 1
+fi
+
+if [ ! -f "$REF" ]; then
+  echo "mdword: no reference doc at $REF" >&2
+  echo "  Place your styled .docx there, or set MDWORD_REFERENCE_DOC to point elsewhere." >&2
+  exit 1
+fi
+
+INPUT="$1"
+shift
+
+OUTPUT=""
+WANT_TOC=0
+for arg in "$@"; do
+  case "$arg" in
+    --toc) WANT_TOC=1 ;;
+    *) OUTPUT="$arg" ;;
+  esac
+done
+
+[ -n "$OUTPUT" ] || OUTPUT="${INPUT%.*}.docx"
+
+PANDOC_ARGS=(--reference-doc="$REF" -f markdown-auto_identifiers)
+[ "$WANT_TOC" -eq 1 ] && PANDOC_ARGS+=(--toc)
+
+pandoc "$INPUT" "${PANDOC_ARGS[@]}" -o "$OUTPUT"
+echo "Wrote $OUTPUT"
